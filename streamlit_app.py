@@ -12,7 +12,7 @@ from Sastrawi.Stemmer.StemmerFactory import StemmerFactory
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.svm import LinearSVC
 
-# --- PENGATURAN HALAMAN (LAYOUT WIDE) ---
+# --- PENGATURAN HALAMAN (LAYOUT WIDE MAKSIMAL) ---
 st.set_page_config(
     page_title="Analisis Sentimen Twitter",
     page_icon="🐦",
@@ -28,7 +28,7 @@ def load_nltk_resources():
 
 load_nltk_resources()
 
-# --- DEFINISI VARIABEL GLOBAL & SASTRAWI (PERSIS NOTEBOOK) ---
+# --- DEFINISI VARIABEL GLOBAL & SASTRAWI ---
 NEGATION_WORDS = {'tidak', 'bukan', 'ga', 'gak', 'ngga', 'nggak', 'jangan', 'belum', 'tanpa'}
 stop_words_id = set(stopwords.words('indonesian')) - NEGATION_WORDS
 
@@ -39,7 +39,7 @@ def get_stemmer():
 
 stemmer = get_stemmer()
 
-# --- KAMUS SLANG 100% SAMA DENGAN DATA EXPERIMEN NOTEBOOK ---
+# --- KAMUS SLANG LENGKAP NOTEBOOK ---
 SLANG_DICT = {
     # --- Kata ganti ---
     'gue':'saya','gw':'saya','gua':'saya','aku':'saya',
@@ -89,7 +89,7 @@ SLANG_DICT = {
     'capek':'lelah','cape':'lelah',
     'cepet':'cepat',
     'lelet':'lambat','lemot':'lambat',
-    # --- Ekspresi noise (dihapus dari output) ---
+    # --- Ekspresi noise ---
     'wkwk':'','wkwkwk':'','haha':'','hahaha':'',
     'huhu':'','huhuh':'','wkwkwkwk':'',
     # --- Terima kasih ---
@@ -110,10 +110,7 @@ SLANG_DICT = {
 
 LABEL_MAP = {-1: 'negatif', 0: 'netral', 1: 'positif'}
 
-# ============================================================
-# INTERPRETIASI FUNGSI PREPROCESSING DARI NOTEBOOK 
-# ============================================================
-
+# --- FUNGSI PREPROCESSING ---
 def remove_emoji(text):
     emoji_pattern = re.compile(
         "[" u"\U0001F600-\U0001F64F" u"\U0001F300-\U0001F5FF"
@@ -125,7 +122,7 @@ def remove_emoji(text):
 def remove_twitter_artifacts(text):
     text = re.sub(r'http\S+|https\S+|www\.\S+', '', text)
     text = re.sub(r'@\w+', '', text)
-    text = re.sub(r'#(\w+)', r'\1', text)  # Mereduksi symbol hashtag menjadi kata biasa
+    text = re.sub(r'#(\w+)', r'\1', text)
     text = re.sub(r'\bRT\b', '', text)
     return text
 
@@ -137,29 +134,26 @@ def normalize_slang(text, slang_dict):
 def preprocess_tweet(text):
     if not isinstance(text, str) or not text.strip():
         return ''
-    text = text.lower()                                      # 1. Lowercase
-    text = remove_emoji(text)                                # 2. Emoji Removal
-    text = remove_twitter_artifacts(text)                    # 3. Twitter Artifacts
-    text = re.sub(r'\d+', '', text)                          # 4. Hapus Angka
-    text = text.translate(str.maketrans('','',string.punctuation)) # 5. Punctuation
-    text = normalize_slang(text, SLANG_DICT)                 # 6. Slang Normalization
-    text = re.sub(r'\s+', ' ', text).strip()                 # 7. Whitespace
-    tokens = word_tokenize(text)                             # 8. Tokenize
-    tokens = [t for t in tokens if len(t) > 1]               # 9. Filter kata < 2 karakter
+    text = text.lower()                                      
+    text = remove_emoji(text)                                
+    text = remove_twitter_artifacts(text)                    
+    text = re.sub(r'\d+', '', text)                          
+    text = text.translate(str.maketrans('','',string.punctuation)) 
+    text = normalize_slang(text, SLANG_DICT)                 
+    text = re.sub(r'\s+', ' ', text).strip()                 
+    tokens = word_tokenize(text)                             
+    tokens = [t for t in tokens if len(t) > 1]               
     
-    # 10. Stopwords Removal (Mempertahankan Negasi)
     filtered_tokens = [w for w in tokens if w not in stop_words_id or w in NEGATION_WORDS]
     
-    # 11. Stemming Sastrawi
     return ' '.join([stemmer.stem(w) for w in filtered_tokens])
 
-# --- FUNGSI TRAINING MODEL AUTOMATIC (DENGAN REVISI PARAMETER NOTEBOOK) ---
+# --- FUNGSI TRAINING MODEL ---
 @st.cache_resource
 def get_model_and_data(file_path):
     model_path = 'svm_model_3label.pkl'
     vec_path = 'tfidf_vectorizer_3label.pkl'
     
-    # Parsing data dengan struktur pengaman separator
     df_raw = pd.read_csv(file_path, sep='\t')
     if df_raw.shape[1] == 1:
         col = df_raw.columns[0]
@@ -181,7 +175,6 @@ def get_model_and_data(file_path):
         df_clean['tweet_clean'] = df_clean['Tweet'].apply(preprocess_tweet)
         df_clean = df_clean[df_clean['tweet_clean'].str.strip() != ''].reset_index(drop=True)
         
-        # Penyesuaian Parameter TF-IDF dengan Notebook Anda
         vectorizer = TfidfVectorizer(
             ngram_range=(1, 1),
             max_features=10000,
@@ -194,7 +187,6 @@ def get_model_and_data(file_path):
         X = vectorizer.fit_transform(df_clean['tweet_clean'])
         y = df_clean['sentimen']
         
-        # Penyesuaian Parameter LinearSVC dengan Notebook Anda
         model = LinearSVC(
             C=1.0,
             max_iter=5000,
@@ -210,7 +202,7 @@ def get_model_and_data(file_path):
         
         return model, vectorizer, df_raw, df_clean
 
-# --- PROSES DATASET ---
+# --- REVISI NAMA FILE DATASET ---
 dataset_name = 'Indonesian Sentiment Twitter Dataset Labeled.csv'
 
 if not os.path.exists(dataset_name):
@@ -220,9 +212,9 @@ if not os.path.exists(dataset_name):
 with st.spinner("Sedang memproses basis data eksperimen, mohon tunggu..."):
     model, vectorizer, df_raw, df_clean = get_model_and_data(dataset_name)
 
-# --- SIDEBAR MINIMALIS ---
-st.sidebar.header("📌 Fitur Pendukung")
-st.sidebar.write(f"**Ukuran Data:**\n- Asli: {len(df_raw):,} baris\n- Bersih: {len(df_clean):,} baris")
+# --- SIDEBAR CLEAN ---
+st.sidebar.header("🔍 Navigasi & Sampel")
+
 filter_label = st.sidebar.selectbox("Lihat contoh tweet dari dataset:", ["Pilih Label Sentimen", "Negatif", "Netral", "Positif"])
 if filter_label != "Pilih Label Sentimen":
     label_code = {"Negatif": -1, "Netral": 0, "Positif": 1}[filter_label]
@@ -231,66 +223,64 @@ if filter_label != "Pilih Label Sentimen":
     for i, sample in enumerate(samples, 1):
         st.sidebar.caption(f"{i}. \"{sample[:110]}...\"")
 
-# --- TAMPILAN UTAMA MELEBAR KE KIRI (WIDE LAYOUT) ---
-col_utama, col_kosong = st.columns([9, 3])
+# --- TAMPILAN UTAMA FULL-WIDTH (SUDAH TIDAK DIBATASI KOLOM) ---
+st.title("Analisis Sentimen Tweet Bahasa Indonesia")
+st.write("Sistem klasifikasi sentimen 3 kelas (Positif, Netral, Negatif) menggunakan pendekatan ekstraksi fitur **TF-IDF Unigram** dan algoritma **Linear Support Vector Machine (LinearSVC)**. Silakan masukkan teks atau tweet pada kolom di bawah untuk melakukan pengujian secara realtime.")
+st.write("---")
 
-with col_utama:
-    st.title("Analisis Sentimen Tweet Bahasa Indonesia")
-    st.write("Sistem klasifikasi sentimen 3 kelas (Positif, Netral, Negatif) menggunakan pendekatan ekstraksi fitur **TF-IDF Unigram** dan algoritma **Linear Support Vector Machine (LinearSVC)**. Silakan masukkan teks atau tweet pada kolom di bawah untuk melakukan pengujian secara realtime.")
-    st.write("---")
+user_input = st.text_area("Masukkan kalimat atau tweet yang ingin dianalisis:", placeholder="Ketik di sini untuk menguji sentimen...")
 
-    user_input = st.text_area("Masukkan kalimat atau tweet yang ingin dianalisis:", placeholder="Ketik di sini untuk menguji sentimen...")
-
-    if st.button("Analisis Sentimen", type="primary"):
-        if not user_input.strip():
-            st.warning("Silakan isi teks terlebih dahulu sebelum menekan tombol!")
+if st.button("Analisis Sentimen", type="primary"):
+    if not user_input.strip():
+        st.warning("Silakan isi teks terlebih dahulu sebelum menekan tombol!")
+    else:
+        cleaned_text = preprocess_tweet(user_input)
+        vec_text = vectorizer.transform([cleaned_text])
+        
+        pred_code = model.predict(vec_text)[0]
+        
+        decision_scores = model.decision_function(vec_text)[0]
+        exp_scores = np.exp(decision_scores - np.max(decision_scores))
+        probabilities = exp_scores / np.sum(exp_scores)
+        
+        prob_dict = dict(zip(model.classes_, probabilities))
+        prob_neg = prob_dict.get(-1, 0.0) * 100
+        prob_net = prob_dict.get(0, 0.0) * 100
+        prob_pos = prob_dict.get(1, 0.0) * 100
+        
+        st.write("### Hasil Klasifikasi:")
+        if pred_code == -1:
+            st.error("🔴 **Sentimen Dominan: NEGATIF**")
+        elif pred_code == 0:
+            st.warning("⚪ **Sentimen Dominan: NETRAL**")
         else:
-            cleaned_text = preprocess_tweet(user_input)
-            vec_text = vectorizer.transform([cleaned_text])
+            st.success("🔵 **Sentimen Dominan: POSITIF**")
             
-            pred_code = model.predict(vec_text)[0]
+        st.write("#### Tingkat Keyakinan Model per Kelas:")
+        
+        st.write(f"🔵 **Positif:** {prob_pos:.1f}%")
+        st.progress(prob_pos / 100)
+        
+        st.write(f"⚪ **Netral:** {prob_net:.1f}%")
+        st.progress(prob_net / 100)
+        
+        st.write(f"🔴 **Negatif:** {prob_neg:.1f}%")
+        st.progress(prob_neg / 100)
+        st.write("")
             
-            # Perhitungan Persentase Probabilitas Lembut (Softmax) atas Nilai Batas Keputusan SVM
-            decision_scores = model.decision_function(vec_text)[0]
-            exp_scores = np.exp(decision_scores - np.max(decision_scores))
-            probabilities = exp_scores / np.sum(exp_scores)
-            
-            prob_dict = dict(zip(model.classes_, probabilities))
-            prob_neg = prob_dict.get(-1, 0.0) * 100
-            prob_net = prob_dict.get(0, 0.0) * 100
-            prob_pos = prob_dict.get(1, 0.0) * 100
-            
-            st.write("### Hasil Klasifikasi:")
-            if pred_code == -1:
-                st.error("🔴 **Sentimen Dominan: NEGATIF**")
-            elif pred_code == 0:
-                st.warning("⚪ **Sentimen Dominan: NETRAL**")
-            else:
-                st.success("🔵 **Sentimen Dominan: POSITIF**")
-                
-            st.write("#### Tingkat Keyakinan Model per Kelas:")
-            
-            st.write(f"🔵 **Positif:** {prob_pos:.1f}%")
-            st.progress(prob_pos / 100)
-            
-            st.write(f"⚪ **Netral:** {prob_net:.1f}%")
-            st.progress(prob_net / 100)
-            
-            st.write(f"🔴 **Negatif:** {prob_neg:.1f}%")
-            st.progress(prob_neg / 100)
-            st.write("")
-                
-            with st.expander("Lihat Hasil Pembersihan Teks (Preprocessing)"):
-                st.write(f"**Teks Asli:** `{user_input}`")
-                st.write(f"**Hasil Penyaringan Kata:** `{cleaned_text if cleaned_text else '[Teks kosong setelah difilter]'}`")
+        with st.expander("Lihat Hasil Pembersihan Teks (Preprocessing)"):
+            st.write(f"**Teks Asli:** `{user_input}`")
+            st.write(f"**Hasil Penyaringan Kata:** `{cleaned_text if cleaned_text else '[Teks kosong setelah difilter]'}`")
 
-    st.write("\n---")
-    with st.expander("📊 Lihat Detail Distribusi Informasi Dataset"):
-        col_data1, col_data2 = st.columns(2)
-        with col_data1:
-            st.write("**Sampel 5 Data Teratas:**")
-            st.dataframe(df_raw[['Tweet', 'sentimen']].head(5), use_container_width=True)
-        with col_data2:
-            st.write("**Komposisi Sentimen Dataset:**")
-            counts = df_raw['sentimen'].map(LABEL_MAP).value_counts()
-            st.bar_chart(counts)
+st.write("\n---")
+
+# --- EXPANDER SEKARANG IKUT MELEBAR FULL KE KANAN ---
+with st.expander("📊 Lihat Detail Distribusi Informasi Dataset", expanded=False):
+    col_data1, col_data2 = st.columns(2)
+    with col_data1:
+        st.write("**Sampel 5 Data Teratas:**")
+        st.dataframe(df_raw[['Tweet', 'sentimen']].head(5), use_container_width=True)
+    with col_data2:
+        st.write("**Komposisi Sentimen Dataset:**")
+        counts = df_raw['sentimen'].map(LABEL_MAP).value_counts()
+        st.bar_chart(counts)
